@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>楓之谷工具箱 Web版</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 自定義捲軸樣式 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .dark-mode { background-color: #1a1a1a; color: #e5e5e5; }
+        body { font-family: "Microsoft JhengHei UI", sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 transition-colors duration-200" id="app" :class="{'dark-mode bg-slate-900 text-white': isDark}">
+
+    <div class="flex h-screen overflow-hidden">
+        <aside class="w-64 flex-shrink-0 flex flex-col border-r" :class="isDark ? 'border-gray-700 bg-slate-800' : 'border-gray-200 bg-white'">
+            <div class="p-4 border-b" :class="isDark ? 'border-gray-700' : 'border-gray-200'">
+                <h1 class="text-xl font-bold flex items-center gap-2">
+                    🍁 楓之谷工具箱
+                </h1>
+                <p class="text-xs text-gray-500 mt-1">Web 單機版 (No Sync)</p>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto p-2 space-y-1">
+                <p class="px-2 text-xs font-bold text-gray-500 mb-2 mt-2">主要功能</p>
+                <button @click="currentTab = 'tasks'" :class="navClass('tasks')" class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+                    📋 每日任務追蹤
+                </button>
+                <button @click="currentTab = 'currency'" :class="navClass('currency')" class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+                    💰 幣值計算機
+                </button>
+                <button @click="currentTab = 'vip'" :class="navClass('vip')" class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+                    💎 VIP 升級計算
+                </button>
+                <button @click="currentTab = 'union'" :class="navClass('union')" class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+                    ⚔️ 戰地管理器
+                </button>
+                <button @click="currentTab = 'memo'" :class="navClass('memo')" class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+                    📝 便利貼
+                </button>
+            </nav>
+
+            <div class="p-4 border-t" :class="isDark ? 'border-gray-700' : 'border-gray-200'">
+                <button @click="toggleTheme" class="w-full py-2 px-4 rounded border flex items-center justify-center gap-2 transition-colors"
+                    :class="isDark ? 'bg-slate-700 border-slate-600 hover:bg-slate-600' : 'bg-gray-100 border-gray-300 hover:bg-gray-200'">
+                    <span v-if="isDark">☀️ 切換亮色</span>
+                    <span v-else>🌙 切換暗色</span>
+                </button>
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-hidden flex flex-col relative">
+            <div v-if="currentTab === 'tasks'" class="h-full flex flex-col p-6 overflow-hidden">
+                <header class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">任務追蹤 ({{ currentDayLabel }})</h2>
+                    <div class="flex gap-2">
+                        <div class="flex bg-gray-200 rounded p-1" :class="isDark ? 'bg-slate-700' : ''">
+                            <button v-for="d in ['今日', '昨日', '三天前']" @click="changeDay(d)" 
+                                class="px-3 py-1 text-sm rounded transition-colors"
+                                :class="viewDay === d ? (isDark ? 'bg-slate-500 text-white' : 'bg-white shadow text-black') : 'text-gray-500'">
+                                {{ d }}
+                            </button>
+                        </div>
+                        <button @click="showAddCharModal = true" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm font-bold">
+                            + 新增角色
+                        </button>
+                    </div>
+                </header>
+
+                <div class="flex-1 overflow-auto bg-opacity-50 rounded-lg border" :class="isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 z-10" :class="isDark ? 'bg-slate-900' : 'bg-gray-100'">
+                            <tr>
+                                <th class="p-3 border-b" :class="borderClass">帳號</th>
+                                <th class="p-3 border-b" :class="borderClass">角色</th>
+                                <th class="p-3 border-b text-center" :class="borderClass">等級</th>
+                                <th v-for="(type, task) in tasksConfig" :key="task" class="p-3 border-b text-center" :class="borderClass">
+                                    {{ task }}
+                                </th>
+                                <th class="p-3 border-b" :class="borderClass">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template v-for="(chars, acc) in currentDayData" :key="acc">
+                                <tr v-for="(info, char, idx) in chars" :key="char" class="group hover:bg-opacity-50" :class="isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-50'">
+                                    <td v-if="idx === 0" :rowspan="Object.keys(chars).length" class="p-3 align-top border-r font-mono text-sm opacity-70" :class="borderClass">
+                                        {{ acc }}
+                                    </td>
+                                    <td class="p-3 font-bold text-blue-500">{{ char }}</td>
+                                    <td class="p-3 text-center">{{ info.level }}</td>
+                                    
+                                    <td v-for="(type, task) in tasksConfig" :key="task" class="p-3 text-center">
+                                        <div v-if="type === 'daily'" class="flex justify-center">
+                                            <input type="checkbox" :checked="info[task]" @change="toggleTask(acc, char, task)" 
+                                                class="w-5 h-5 rounded cursor-pointer accent-green-600" :disabled="viewDay !== '今日'">
+                                        </div>
+                                        <div v-else class="flex justify-center">
+                                            <button @click="toggleTask(acc, char, task)" 
+                                                class="px-2 py-1 rounded text-xs font-bold min-w-[3rem] transition-colors"
+                                                :class="getWeeklyBtnClass(info[task])" :disabled="viewDay !== '今日'">
+                                                {{ info[task] || 0 }} / 5
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td class="p-3 text-center">
+                                        <button @click="deleteChar(acc, char)" class="text-red-500 hover:text-red-400 text-xs">刪除</button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr v-if="Object.keys(currentDayData).length === 0">
+                                <td :colspan="4 + Object.keys(tasksConfig).length" class="p-8 text-center opacity-50">
+                                    尚無資料，請點擊右上方「新增角色」
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-if="currentTab === 'currency'" class="h-full flex flex-col items-center justify-center p-6">
+                <div class="w-full max-w-md p-6 rounded-xl border shadow-lg" :class="isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'">
+                    <h2 class="text-xl font-bold mb-6 text-center">💰 幣值計算機</h2>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm mb-1 opacity-70">當日匯率 (1 台幣 = ? 萬楓幣)</label>
+                        <input type="number" v-model="currencyRate" class="w-full p-2 rounded border bg-transparent" :class="borderClass">
+                    </div>
+                    <hr class="my-4 border-gray-500 opacity-30">
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm mb-1 opacity-70">遊戲幣換台幣</label>
+                        <div class="flex gap-2">
+                            <input type="text" v-model="gameToTwdInput" placeholder="輸入 e.g. 50億, 100e" class="flex-1 p-2 rounded border bg-transparent" :class="borderClass">
+                            <button @click="calcGameToTwd" class="bg-blue-600 text-white px-4 rounded">計算</button>
+                        </div>
+                        <p class="mt-2 text-right font-bold text-red-500">{{ gameToTwdResult }}</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm mb-1 opacity-70">台幣換遊戲幣</label>
+                        <div class="flex gap-2">
+                            <input type="number" v-model="twdToGameInput" placeholder="輸入台幣金額" class="flex-1 p-2 rounded border bg-transparent" :class="borderClass">
+                            <button @click="calcTwdToGame" class="bg-green-600 text-white px-4 rounded">計算</button>
+                        </div>
+                        <p class="mt-2 text-right font-bold text-green-500">{{ twdToGameResult }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="currentTab === 'vip'" class="h-full flex flex-col items-center justify-center p-6 overflow-y-auto">
+                <div class="w-full max-w-lg p-6 rounded-xl border shadow-lg my-auto" :class="isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'">
+                    <h2 class="text-xl font-bold mb-4 text-center">💎 VIP 升級計算機</h2>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-xs mb-1">目前等級</label>
+                            <select v-model="vipCurrentRank" class="w-full p-2 rounded border bg-transparent" :class="borderClass" :disabled="vipPointsInput > 0">
+                                <option v-for="r in vipOrder" :value="r">{{ r }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs mb-1">已累積點數</label>
+                            <input type="number" v-model="vipPointsInput" placeholder="輸入自動鎖定等級" class="w-full p-2 rounded border bg-transparent" :class="borderClass">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-xs mb-1">目標等級</label>
+                            <select v-model="vipTargetRank" class="w-full p-2 rounded border bg-transparent" :class="borderClass">
+                                <option v-for="r in vipOrder" :value="r">{{ r }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs mb-1">消費方式</label>
+                            <select v-model="vipMethod" class="w-full p-2 rounded border bg-transparent" :class="borderClass">
+                                <option value="buy">自購 (100:30)</option>
+                                <option value="gift">送禮 (100:24)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button @click="calcVip" class="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded mb-4 transition-colors">計算所需花費</button>
+                    
+                    <div v-if="vipResult" class="p-4 rounded bg-opacity-20 bg-gray-500 border" :class="borderClass">
+                        <div class="text-center mb-2">需消費: <span class="text-2xl font-bold text-red-500">{{ vipResult.totalCost }}</span> 樂豆點</div>
+                        <div class="text-xs text-center opacity-70 mb-4">(可獲得 {{ vipResult.pointsGot }} VIP點數)</div>
+                        <div class="p-2 bg-green-100 dark:bg-green-900 rounded mb-2 text-center border border-green-300 dark:border-green-700">
+                            <div class="text-xs font-bold text-green-800 dark:text-green-300">若使用 5% 回饋 (讀卡機)</div>
+                            <div class="text-lg font-bold text-red-600 dark:text-red-400">{{ vipResult.cashNeeded }} 台幣</div>
+                        </div>
+                        <ul class="text-xs space-y-1 opacity-80 mt-2 list-disc pl-4">
+                            <li v-for="item in vipResult.breakdown">{{ item }}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="currentTab === 'union'" class="h-full flex flex-col p-6 overflow-hidden">
+                <header class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">戰地管理器</h2>
+                    <div class="text-xl font-bold text-red-500">🏆 總等級: {{ totalUnionLevel }}</div>
+                </header>
+                <div class="mb-4">
+                    <label class="text-sm mr-2">選擇帳號:</label>
+                    <select v-model="currentUnionAcc" class="p-2 rounded border bg-transparent" :class="borderClass">
+                        <option v-for="acc in accountList" :value="acc">{{ acc }}</option>
+                    </select>
+                </div>
+                
+                <div class="flex-1 overflow-auto rounded-lg border p-4" :class="isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'">
+                    <div v-if="!currentUnionAcc" class="text-center opacity-50 mt-10">請先建立帳號或選擇帳號</div>
+                    <div v-else class="space-y-6">
+                        <div v-for="(jobs, group) in jobTree" :key="group">
+                            <h3 class="font-bold text-lg mb-2 opacity-80 border-b pb-1" :class="borderClass">{{ group }}</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                <div v-for="job in jobs" :key="job" class="flex items-center gap-2 p-2 rounded hover:bg-opacity-10 hover:bg-gray-500">
+                                    <input type="checkbox" :checked="getUnionStatus(job).done" @change="e => updateUnionDone(job, e.target.checked)" class="w-4 h-4 rounded">
+                                    <div class="flex-1">
+                                        <div class="text-sm">{{ job }}</div>
+                                    </div>
+                                    <input type="number" :value="getUnionStatus(job).level" @input="e => updateUnionLevel(job, e.target.value)" 
+                                        placeholder="Lv" class="w-12 text-xs p-1 text-center bg-transparent border-b focus:outline-none" :class="isDark?'border-slate-500':'border-gray-300'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="currentTab === 'memo'" class="h-full flex flex-col p-6">
+                <h2 class="text-2xl font-bold mb-4">📝 便利貼</h2>
+                <textarea v-model="memoText" class="flex-1 w-full p-4 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    :class="isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-yellow-50 border-yellow-200 text-gray-800'"
+                    placeholder="想記什麼就打在這，會自動存檔..."></textarea>
+            </div>
+
+        </main>
+    </div>
+
+    <div v-if="showAddCharModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="w-80 p-6 rounded-lg shadow-xl" :class="isDark ? 'bg-slate-800' : 'bg-white'">
+            <h3 class="text-lg font-bold mb-4">新增角色</h3>
+            <input v-model="newCharForm.acc" placeholder="帳號" class="w-full mb-3 p-2 border rounded bg-transparent" :class="borderClass">
+            <input v-model="newCharForm.name" placeholder="角色名稱" class="w-full mb-3 p-2 border rounded bg-transparent" :class="borderClass">
+            <div class="flex gap-2 mb-4">
+                <input v-model.number="newCharForm.level" type="number" placeholder="等級" class="w-1/2 p-2 border rounded bg-transparent" :class="borderClass">
+                <select v-model="newCharForm.server" class="w-1/2 p-2 border rounded bg-transparent" :class="borderClass">
+                    <option v-for="s in servers" :value="s">{{ s }}</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button @click="showAddCharModal = false" class="px-4 py-2 text-gray-500">取消</button>
+                <button @click="addCharacter" class="px-4 py-2 bg-blue-600 text-white rounded">新增</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, watch, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // === 狀態管理 ===
+                const isDark = ref(localStorage.getItem('maple_theme') === 'light' ? false : true);
+                const currentTab = ref('tasks');
+                const viewDay = ref('今日');
+                const todayStr = new Date().toISOString().split('T')[0];
+                
+                // 資料結構
+                const tasksConfig = ref({
+                    "ARC": "daily", "AUT": "daily", "HD": "daily", "怪物公園": "daily", "點名簽到": "daily", "每週王": "weekly"
+                });
+                const data = ref({}); // { date: { acc: { char: { ... } } } }
+                const unionData = ref({});
+                const memoText = ref(localStorage.getItem('maple_memo') || "");
+
+                // 計算機變數
+                const currencyRate = ref(localStorage.getItem('maple_rate') || "");
+                const gameToTwdInput = ref("");
+                const gameToTwdResult = ref("-");
+                const twdToGameInput = ref("");
+                const twdToGameResult = ref("-");
+
+                // VIP 變數
+                const vipOrder = ["非VIP", "銀牌", "金牌", "鑽石", "皇家"];
+                const vipDataMap = {
+                    "非VIP": {th: 0, buy: 20, gift: 16},
+                    "銀牌": {th: 50000, buy: 20, gift: 16},
+                    "金牌": {th: 150000, buy: 30, gift: 24},
+                    "鑽石": {th: 675000, buy: 40, gift: 32},
+                    "皇家": {th: 3675000, buy: 50, gift: 40}
+                };
+                const vipCurrentRank = ref("非VIP");
+                const vipTargetRank = ref("鑽石");
+                const vipPointsInput = ref("");
+                const vipMethod = ref("buy");
+                const vipResult = ref(null);
+
+                // 職業列表 (簡化版)
+                const jobTree = {
+                    "冒險家": ["英雄", "聖騎士", "黑騎士", "主教", "冰雷", "火毒", "箭神", "神射手", "開拓者", "夜使者", "暗影神偷", "影武者", "槍神", "拳霸", "重砲"],
+                    "皇家騎士團": ["聖魂劍士", "烈焰巫師", "破風使者", "暗夜行者", "閃雷悍將", "米哈逸"],
+                    "英雄團": ["狂狼勇士", "龍魔導士", "夜光", "精靈遊俠", "幻影俠盜", "隱月"],
+                    "反抗軍/惡魔": ["爆拳槍神", "煉獄巫師", "狂豹獵人", "機甲戰神", "惡魔殺手", "惡魔復仇者", "傑諾"],
+                    "超新星/雷普": ["凱撒", "凱殷", "卡蒂娜", "天使破壞者", "阿戴爾", "伊利恩", "卡莉", "亞克"],
+                    "阿尼瑪/其他": ["蓮", "菈菈", "虎影", "劍豪", "陰陽師", "琳恩", "墨玄", "神之子"]
+                };
+                const currentUnionAcc = ref("");
+
+                // 新增角色 Form
+                const showAddCharModal = ref(false);
+                const servers = ["艾麗亞", "琉德", "優伊娜", "愛麗西亞", "殺人鯨", "普力特"];
+                const newCharForm = ref({ acc: "", name: "", level: 260, server: "艾麗亞" });
+
+                // === 核心邏輯 ===
+                
+                // 初始化讀取
+                onMounted(() => {
+                    const savedData = localStorage.getItem('maple_data');
+                    if (savedData) data.value = JSON.parse(savedData);
+                    
+                    const savedUnion = localStorage.getItem('maple_union');
+                    if (savedUnion) unionData.value = JSON.parse(savedUnion);
+
+                    // 每日重置與繼承邏輯
+                    if (!data.value[todayStr]) {
+                        const dates = Object.keys(data.value).sort().reverse();
+                        const lastDate = dates[0];
+                        data.value[todayStr] = {};
+
+                        if (lastDate) {
+                            const lastDateObj = new Date(lastDate);
+                            const nowObj = new Date(todayStr);
+                            // 判斷是否過週三 (簡單版)
+                            const diffDays = (nowObj - lastDateObj) / (1000 * 60 * 60 * 24);
+                            const isWeeklyReset = nowObj.getDay() === 3 || diffDays > 6;
+
+                            Object.keys(data.value[lastDate]).forEach(acc => {
+                                data.value[todayStr][acc] = {};
+                                Object.keys(data.value[lastDate][acc]).forEach(char => {
+                                    const oldInfo = data.value[lastDate][acc][char];
+                                    const newInfo = { level: oldInfo.level, server: oldInfo.server };
+                                    
+                                    for (const [task, type] of Object.entries(tasksConfig.value)) {
+                                        if (type === 'daily') newInfo[task] = false;
+                                        else newInfo[task] = isWeeklyReset ? 0 : (oldInfo[task] || 0);
+                                    }
+                                    data.value[todayStr][acc][char] = newInfo;
+                                });
+                            });
+                        }
+                    }
+                    
+                    // 預設選第一個帳號給 Union
+                    const accs = accountList.value;
+                    if (accs.length > 0) currentUnionAcc.value = accs[0];
+                });
+
+                // 自動存檔
+                watch(data, (newVal) => localStorage.setItem('maple_data', JSON.stringify(newVal)), { deep: true });
+                watch(unionData, (newVal) => localStorage.setItem('maple_union', JSON.stringify(newVal)), { deep: true });
+                watch(memoText, (newVal) => localStorage.setItem('maple_memo', newVal));
+                watch(currencyRate, (newVal) => localStorage.setItem('maple_rate', newVal));
+
+                // === Computed ===
+                const borderClass = computed(() => isDark.value ? 'border-gray-600' : 'border-gray-300');
+                
+                const currentDayLabel = computed(() => {
+                    if (viewDay.value === '今日') return todayStr;
+                    const d = new Date(todayStr);
+                    if (viewDay.value === '昨日') d.setDate(d.getDate() - 1);
+                    else d.setDate(d.getDate() - 3);
+                    return d.toISOString().split('T')[0];
+                });
+
+                const currentDayData = computed(() => {
+                    return data.value[currentDayLabel.value] || {};
+                });
+
+                const accountList = computed(() => {
+                    // 收集所有出現過的帳號
+                    const set = new Set();
+                    Object.values(data.value).forEach(dayData => {
+                        Object.keys(dayData).forEach(acc => set.add(acc));
+                    });
+                    return Array.from(set);
+                });
+
+                const totalUnionLevel = computed(() => {
+                    if (!currentUnionAcc.value || !unionData.value[currentUnionAcc.value]) return 0;
+                    let total = 0;
+                    const userJobs = unionData.value[currentUnionAcc.value];
+                    Object.values(userJobs).forEach(info => {
+                        total += (parseInt(info.level) || 0);
+                    });
+                    return total;
+                });
+
+                // === Methods ===
+                const toggleTheme = () => {
+                    isDark.value = !isDark.value;
+                    localStorage.setItem('maple_theme', isDark.value ? 'dark' : 'light');
+                };
+                
+                const navClass = (tab) => {
+                    const active = currentTab.value === tab;
+                    if (isDark.value) return active ? 'bg-blue-900 text-blue-200' : 'text-gray-400 hover:bg-slate-700';
+                    return active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100';
+                };
+
+                const changeDay = (d) => viewDay.value = d;
+
+                const addCharacter = () => {
+                    const { acc, name, level, server } = newCharForm.value;
+                    if (!acc || !name) return alert("請輸入帳號與名稱");
+                    
+                    if (!data.value[todayStr][acc]) data.value[todayStr][acc] = {};
+                    
+                    const newCharData = { level, server };
+                    for (const [task, type] of Object.entries(tasksConfig.value)) {
+                        newCharData[task] = type === 'daily' ? false : 0;
+                    }
+                    
+                    data.value[todayStr][acc][name] = newCharData;
+                    showAddCharModal.value = false;
+                };
+
+                const deleteChar = (acc, char) => {
+                    if(!confirm(`確定刪除 ${char}?`)) return;
+                    delete data.value[todayStr][acc][char];
+                    if(Object.keys(data.value[todayStr][acc]).length === 0) {
+                        delete data.value[todayStr][acc];
+                    }
+                };
+
+                const toggleTask = (acc, char, task) => {
+                    const charData = data.value[todayStr][acc][char];
+                    if (tasksConfig.value[task] === 'daily') {
+                        charData[task] = !charData[task];
+                    } else {
+                        charData[task] = (charData[task] + 1) % 6;
+                    }
+                };
+
+                const getWeeklyBtnClass = (val) => {
+                    val = val || 0;
+                    if (val >= 5) return 'bg-green-600 text-white';
+                    if (val > 0) return 'bg-blue-100 text-blue-800 border border-blue-300';
+                    return isDark.value ? 'bg-slate-700 text-gray-400' : 'bg-gray-200 text-gray-500';
+                };
+
+                // VIP Calculator Logic
+                const calcVip = () => {
+                    let currPoints = parseInt(vipPointsInput.value) || 0;
+                    let currR = vipCurrentRank.value;
+                    const targetR = vipTargetRank.value;
+                    
+                    // 自動判斷等級
+                    if (currPoints > 0) {
+                        for (let i = vipOrder.length - 1; i >= 0; i--) {
+                            if (currPoints >= vipDataMap[vipOrder[i]].th) {
+                                currR = vipOrder[i];
+                                break;
+                            }
+                        }
+                    } else {
+                        currPoints = vipDataMap[currR].th;
+                    }
+
+                    const currIdx = vipOrder.indexOf(currR);
+                    const targetIdx = vipOrder.indexOf(targetR);
+                    
+                    if (targetIdx <= currIdx) {
+                        vipResult.value = { totalCost: 0, pointsGot: 0, cashNeeded: 0, breakdown: ["已達成目標"] };
+                        return;
+                    }
+
+                    let totalCost = 0;
+                    let tempPoints = currPoints;
+                    const breakdown = [];
+                    const rateKey = vipMethod.value; // 'buy' or 'gift'
+
+                    for (let i = currIdx; i < targetIdx; i++) {
+                        const thisRank = vipOrder[i];
+                        const nextRank = vipOrder[i+1];
+                        const gap = vipDataMap[nextRank].th - tempPoints;
+                        
+                        if (gap > 0) {
+                            const rate = vipDataMap[thisRank][rateKey]; // e.g. 20
+                            const cost = Math.ceil(gap / rate) * 100; // 每100點為單位? Python 邏輯是 gap/rate
+                            // 修正邏輯以匹配 Python: cost = ceil(gap / rate)
+                            const costRaw = Math.ceil(gap / rate);
+                            totalCost += costRaw;
+                            breakdown.push(`${thisRank} -> ${nextRank}: 需消費 ${costRaw} 點`);
+                            tempPoints = vipDataMap[nextRank].th;
+                        }
+                    }
+
+                    const cashNeeded = Math.ceil(totalCost / 1.05);
+                    const pointsGot = vipDataMap[targetR].th - currPoints;
+
+                    vipResult.value = { 
+                        totalCost: totalCost.toLocaleString(), 
+                        pointsGot: pointsGot.toLocaleString(),
+                        cashNeeded: cashNeeded.toLocaleString(),
+                        breakdown 
+                    };
+                };
+
+                // Currency Calculator
+                const calcGameToTwd = () => {
+                    const rate = parseFloat(currencyRate.value);
+                    if (!rate) return gameToTwdResult.value = "請輸入匯率";
+                    
+                    let valStr = gameToTwdInput.value.toLowerCase().replace(/,/g, '');
+                    let multiplier = 1;
+                    if (valStr.includes('e') || valStr.includes('億')) multiplier = 100000000;
+                    else if (valStr.includes('w') || valStr.includes('萬')) multiplier = 10000;
+                    
+                    const val = parseFloat(valStr) * multiplier;
+                    if (isNaN(val)) return;
+                    
+                    // 1台幣 = rate萬 => 1台幣 = rate * 10000
+                    // cost = val / (rate * 10000)
+                    const cost = val / (rate * 10000);
+                    gameToTwdResult.value = `約 ${cost.toFixed(1)} 台幣`;
+                };
+
+                const calcTwdToGame = () => {
+                    const rate = parseFloat(currencyRate.value);
+                    const twd = parseFloat(twdToGameInput.value);
+                    if (!rate || !twd) return;
+                    
+                    const gameVal = twd * rate * 10000;
+                    let display = gameVal;
+                    if (gameVal > 100000000) display = (gameVal / 100000000).toFixed(2) + " 億";
+                    else if (gameVal > 10000) display = (gameVal / 10000).toFixed(1) + " 萬";
+                    
+                    twdToGameResult.value = `可換 ${display}`;
+                };
+
+                // Union Methods
+                const getUnionStatus = (job) => {
+                    if (!currentUnionAcc.value) return { level: 0, done: false };
+                    if (!unionData.value[currentUnionAcc.value]) unionData.value[currentUnionAcc.value] = {};
+                    return unionData.value[currentUnionAcc.value][job] || { level: 0, done: false };
+                };
+
+                const updateUnionDone = (job, checked) => {
+                    if (!currentUnionAcc.value) return;
+                    if (!unionData.value[currentUnionAcc.value][job]) unionData.value[currentUnionAcc.value][job] = { level: 0 };
+                    unionData.value[currentUnionAcc.value][job].done = checked;
+                };
+
+                const updateUnionLevel = (job, val) => {
+                    if (!currentUnionAcc.value) return;
+                    if (!unionData.value[currentUnionAcc.value][job]) unionData.value[currentUnionAcc.value][job] = { done: false };
+                    unionData.value[currentUnionAcc.value][job].level = parseInt(val) || 0;
+                };
+
+                return {
+                    isDark, toggleTheme, currentTab, navClass,
+                    viewDay, changeDay, currentDayLabel, currentDayData,
+                    tasksConfig, toggleTask, getWeeklyBtnClass, deleteChar,
+                    showAddCharModal, newCharForm, addCharacter, servers, borderClass,
+                    // VIP
+                    vipOrder, vipCurrentRank, vipTargetRank, vipPointsInput, vipMethod, vipResult, calcVip,
+                    // Currency
+                    currencyRate, gameToTwdInput, gameToTwdResult, calcGameToTwd, twdToGameInput, twdToGameResult, calcTwdToGame,
+                    // Memo
+                    memoText,
+                    // Union
+                    jobTree, accountList, currentUnionAcc, totalUnionLevel, getUnionStatus, updateUnionDone, updateUnionLevel
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
